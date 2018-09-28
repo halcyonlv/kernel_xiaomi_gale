@@ -247,6 +247,7 @@ int __cgroup_bpf_attach(struct cgroup *cgrp, struct bpf_prog *prog,
 	struct bpf_cgroup_storage *storage[MAX_BPF_CGROUP_STORAGE_TYPE],
 		*old_storage[MAX_BPF_CGROUP_STORAGE_TYPE] = {NULL};
 	enum bpf_cgroup_storage_type stype;
+	struct cgroup_subsys_state *css;
 	struct bpf_prog_list *pl;
 	bool pl_was_allocated;
 	int err;
@@ -345,18 +346,28 @@ int __cgroup_bpf_attach(struct cgroup *cgrp, struct bpf_prog *prog,
 	return 0;
 
 cleanup:
-	/* and cleanup the prog list */
-	pl->prog = old_prog;
+	/* oom while computing effective. Free all computed effective arrays
+	 * since they were not activated
+	 */
+	css_for_each_descendant_pre(css, &cgrp->self) {
+		struct cgroup *desc = container_of(css, struct cgroup, self);
+
+		bpf_prog_array_free(desc->bpf.inactive);
+		desc->bpf.inactive = NULL;
+	}
+
+       /* and cleanup the prog list */
+       pl->prog = old_prog;
 	for_each_cgroup_storage_type(stype) {
 		bpf_cgroup_storage_free(pl->storage[stype]);
 		pl->storage[stype] = old_storage[stype];
 		bpf_cgroup_storage_link(old_storage[stype], cgrp, type);
 	}
-	if (pl_was_allocated) {
-		list_del(&pl->node);
-		kfree(pl);
-	}
-	return err;
+       if (pl_was_allocated) {
+               list_del(&pl->node);
+               kfree(pl);
+       }
+       return err;
 }
 
 /**

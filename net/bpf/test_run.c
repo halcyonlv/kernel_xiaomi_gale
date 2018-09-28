@@ -18,7 +18,6 @@ static __always_inline u32 bpf_test_run_one(struct bpf_prog *prog, void *ctx,
 
 	preempt_disable();
 	rcu_read_lock();
-	bpf_cgroup_storage_set(storage);
 	ret = BPF_PROG_RUN(prog, ctx);
 	rcu_read_unlock();
 	preempt_enable();

@@ -192,7 +192,6 @@ const struct bpf_func_proto bpf_get_current_comm_proto = {
 	.arg2_type	= ARG_CONST_SIZE,
 };
 
-#ifdef CONFIG_CGROUPS
 BPF_CALL_0(bpf_get_current_cgroup_id)
 {
 	struct cgroup *cgrp = task_dfl_cgroup(current);
@@ -207,9 +206,7 @@ const struct bpf_func_proto bpf_get_current_cgroup_id_proto = {
 };
 
 #ifdef CONFIG_CGROUP_BPF
-DECLARE_PER_CPU(struct bpf_cgroup_storage*,
-		bpf_cgroup_storage[MAX_BPF_CGROUP_STORAGE_TYPE]);
-
+DECLARE_PER_CPU(void*, bpf_cgroup_storage[MAX_BPF_CGROUP_STORAGE_TYPE]);
 BPF_CALL_2(bpf_get_local_storage, struct bpf_map *, map, u64, flags)
 {
 	/* flags argument is not used now,
@@ -217,17 +214,7 @@ BPF_CALL_2(bpf_get_local_storage, struct bpf_map *, map, u64, flags)
 	 * verifier checks that its value is correct.
 	 */
 	enum bpf_cgroup_storage_type stype = cgroup_storage_type(map);
-	struct bpf_cgroup_storage *storage;
-	void *ptr;
-
-	storage = this_cpu_read(bpf_cgroup_storage[stype]);
-
-	if (stype == BPF_CGROUP_STORAGE_SHARED)
-		ptr = &READ_ONCE(storage->buf)->data[0];
-	else
-		ptr = this_cpu_ptr(storage->percpu_buf);
-
-	return (unsigned long)ptr;
+	return (unsigned long) this_cpu_read(bpf_cgroup_storage[stype]);
 }
 
 const struct bpf_func_proto bpf_get_local_storage_proto = {
@@ -237,5 +224,4 @@ const struct bpf_func_proto bpf_get_local_storage_proto = {
 	.arg1_type	= ARG_CONST_MAP_PTR,
 	.arg2_type	= ARG_ANYTHING,
 };
-#endif
 #endif
