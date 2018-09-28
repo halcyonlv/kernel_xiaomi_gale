@@ -200,7 +200,6 @@ int bpf_percpu_cgroup_storage_update(struct bpf_map *_map, void *_key,
 		rcu_read_unlock();
 		return -ENOENT;
 	}
-
 	/* the user space will provide round_up(value_size, 8) bytes that
 	 * will be copied into per-cpu area. bpf programs can only access
 	 * value_size of it. During lookup the same extra bytes will be
@@ -368,7 +367,6 @@ static size_t bpf_cgroup_storage_calculate_size(struct bpf_map *map, u32 *pages)
 		*pages = round_up(round_up(size, 8) * num_possible_cpus(),
 				  PAGE_SIZE) >> PAGE_SHIFT;
 	}
-
 	return size;
 }
 
@@ -386,7 +384,6 @@ struct bpf_cgroup_storage *bpf_cgroup_storage_alloc(struct bpf_prog *prog,
 		return NULL;
 
 	size = bpf_cgroup_storage_calculate_size(map, &pages);
-
 	if (bpf_map_charge_memlock(map, pages))
 		return ERR_PTR(-EPERM);
 
@@ -410,7 +407,6 @@ struct bpf_cgroup_storage *bpf_cgroup_storage_alloc(struct bpf_prog *prog,
 	storage->map = (struct bpf_cgroup_storage_map *)map;
 
 	return storage;
-
 enomem:
 	bpf_map_uncharge_memlock(map, pages);
 	kfree(storage);
@@ -421,7 +417,6 @@ static void free_shared_cgroup_storage_rcu(struct rcu_head *rcu)
 {
 	struct bpf_cgroup_storage *storage =
 		container_of(rcu, struct bpf_cgroup_storage, rcu);
-
 	kfree(storage->buf);
 	kfree(storage);
 }
@@ -430,7 +425,6 @@ static void free_percpu_cgroup_storage_rcu(struct rcu_head *rcu)
 {
 	struct bpf_cgroup_storage *storage =
 		container_of(rcu, struct bpf_cgroup_storage, rcu);
-
 	free_percpu(storage->percpu_buf);
 	kfree(storage);
 }
@@ -445,7 +439,6 @@ void bpf_cgroup_storage_free(struct bpf_cgroup_storage *storage)
 		return;
 
 	map = &storage->map->map;
-
 	bpf_cgroup_storage_calculate_size(map, &pages);
 	bpf_map_uncharge_memlock(map, pages);
 
