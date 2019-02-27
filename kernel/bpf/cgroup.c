@@ -803,7 +803,7 @@ EXPORT_SYMBOL(__cgroup_bpf_run_filter_sysctl);
 static const struct bpf_func_proto *
 sysctl_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
-	return cgroup_base_func_proto(func_id, prog);
+	return cgroup_dev_func_proto(func_id, prog);
 }
 
 static bool sysctl_is_valid_access(int off, int size, enum bpf_access_type type,
