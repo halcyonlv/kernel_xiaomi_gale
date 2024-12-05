@@ -657,8 +657,6 @@ struct binder_transaction {
 	#ifdef CONFIG_MTK_TASK_TURBO
 		struct task_struct *inherit_task;
 	#endif
-	ANDROID_VENDOR_DATA(1);
-	ANDROID_OEM_DATA_ARRAY(1, 2);
 };
 
 /**
