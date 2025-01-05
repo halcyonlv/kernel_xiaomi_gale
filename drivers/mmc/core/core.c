@@ -903,6 +903,8 @@ int mmc_run_queue_thread(void *data)
 	pr_info("[CQ] start cmdq thread\n");
 	mt_bio_queue_alloc(current, NULL, false);
 
+	set_user_nice(current, MIN_NICE);
+
 	while (1) {
 		mt_biolog_cmdq_check();
 		/* End request stage 1/2 */
