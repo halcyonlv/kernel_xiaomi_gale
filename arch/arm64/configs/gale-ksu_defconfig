@@ -482,6 +482,7 @@ CONFIG_LLVM_POLLY=y
 
 # KernelSU
 CONFIG_KSU=y
+CONFIG_KSU_MANUAL_HOOK=y
 
 # KernelSU - SusFs
 # CONFIG_KSU_SUSFS is not set
