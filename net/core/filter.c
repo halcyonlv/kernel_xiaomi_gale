@@ -5747,6 +5747,7 @@ static bool sk_skb_is_valid_access(int off, int size,
 	}
 
 	switch (off) {
+	case bpf_ctx_range(struct __sk_buff, flow_keys):
 	case bpf_ctx_range(struct __sk_buff, mark):
 		return false;
 	case bpf_ctx_range(struct __sk_buff, data):
@@ -6119,7 +6120,6 @@ static u32 bpf_convert_ctx_access(enum bpf_access_type type,
 				      bpf_target_off(struct sock_common,
 						     skc_num, 2, target_size));
 		break;
-
 	case offsetof(struct __sk_buff, flow_keys):
 		off  = si->off;
 		off -= offsetof(struct __sk_buff, flow_keys);
@@ -7082,6 +7082,9 @@ const struct bpf_verifier_ops sk_skb_verifier_ops = {
 const struct bpf_prog_ops sk_skb_prog_ops = {
 };
 
+const struct bpf_prog_ops flow_dissector_prog_ops = {
+};
+
 const struct bpf_verifier_ops sk_msg_verifier_ops = {
 	.get_func_proto		= sk_msg_func_proto,
 	.is_valid_access	= sk_msg_is_valid_access,
@@ -7095,9 +7098,6 @@ const struct bpf_verifier_ops flow_dissector_verifier_ops = {
 	.get_func_proto		= flow_dissector_func_proto,
 	.is_valid_access	= flow_dissector_is_valid_access,
 	.convert_ctx_access	= bpf_convert_ctx_access,
-};
-
-const struct bpf_prog_ops flow_dissector_prog_ops = {
 };
 
 int sk_detach_filter(struct sock *sk)
