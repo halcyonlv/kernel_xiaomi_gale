@@ -18,7 +18,6 @@
 #define DBG_LOG_INFO(x, args...) \
 	pr_info(DEBUG_PREFIX "[info] %s " x, __func__, ##args)
 
-
 /* print to console via seq file */
 #define DBG_LOG_CON(s, x, args...) \
 	{\
