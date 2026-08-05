@@ -42,8 +42,8 @@
 #endif	/* !defined(CONFIG_MTK_CLKMGR) */
 
 #if (!defined(CONFIG_SILEAD_FP_PLATFORM))
-#include "mtk_spi.h"
-#include "mtk_spi_hal.h"
+//#include "mtk_spi.h"
+//#include "mtk_spi_hal.h"
 
 struct mt_spi_t {
     struct platform_device *pdev;
@@ -64,7 +64,9 @@ struct mt_spi_t {
     struct clk *clk_main;	/* main clock for spi bus */
 #endif				/* !defined(CONFIG_MTK_LEGACY) */
 };
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 start*/
 extern struct silfp_data silfp_dev;
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 end*/
 #ifndef __MTK_SPI_HAL_H__
 extern int mt_spi_enable_master_clk(struct spi_device *spidev);
 extern void mt_spi_disable_master_clk(struct spi_device *spidev);
@@ -79,6 +81,9 @@ const static uint8_t TANAME[] = { 0x51, 0x1E, 0xAD, 0x0D, 0x00, 0x00, 0x00, 0x00
 static irqreturn_t silfp_irq_handler(int irq, void *dev_id);
 static void silfp_work_func(struct work_struct *work);
 static int silfp_input_init(struct silfp_data *fp_dev);
+#if defined(CONFIG_SILEAD_FP_PLATFORM)
+extern void silfp_spi_clk_enable(bool bonoff);
+#endif
 
 /* -------------------------------------------------------------------- */
 /*                            power supply                              */
@@ -105,6 +110,7 @@ static void silfp_hw_poweron(struct silfp_data *fp_dev)
     if ( fp_dev->pin.pins_avdd_h ) {
         err = pinctrl_select_state(fp_dev->pin.pinctrl, fp_dev->pin.pins_avdd_h);
     }
+
     if ( fp_dev->pin.pins_vddio_h ) {
         err = pinctrl_select_state(fp_dev->pin.pinctrl, fp_dev->pin.pins_vddio_h);
     }
@@ -137,6 +143,11 @@ static void silfp_hw_poweroff(struct silfp_data *fp_dev)
 #endif /* BSP_SIL_POWER_SUPPLY_REGULATOR */
 
 #ifdef BSP_SIL_POWER_SUPPLY_PINCTRL
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 start*/
+    if ( fp_dev->pin.pins_avdd_l ) {
+        pinctrl_select_state(fp_dev->pin.pinctrl, fp_dev->pin.pins_avdd_l);
+    }
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 end*/
     /* Power control by GPIOs */
     //fp_dev->pin.pins_avdd_h = NULL;
     //fp_dev->pin.pins_vddio_h = NULL;
@@ -171,8 +182,14 @@ static void silfp_power_deinit(struct silfp_data *fp_dev)
 #endif /* BSP_SIL_POWER_SUPPLY_REGULATOR */
 
 #ifdef BSP_SIL_POWER_SUPPLY_PINCTRL
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 start*/
+    if ( fp_dev->pin.pins_avdd_l ) {
+        pinctrl_select_state(fp_dev->pin.pinctrl, fp_dev->pin.pins_avdd_l);
+    }
     /* Power control by GPIOs */
     fp_dev->pin.pins_avdd_h = NULL;
+    fp_dev->pin.pins_avdd_l = NULL;
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 end*/
     fp_dev->pin.pins_vddio_h = NULL;
     if (fp_dev->pin.pinctrl) {
         devm_pinctrl_put(fp_dev->pin.pinctrl);
@@ -244,7 +261,8 @@ static int silfp_parse_dts(struct silfp_data* fp_dev)
 #ifdef CONFIG_OF
     struct device_node *node = NULL;
     struct platform_device *pdev = NULL;
-    int  ret = 0;
+    int ret = 0;
+	int gpio = 0; 
 
     do {
         node = of_find_compatible_node(NULL, NULL, FP_IRQ_OF);
@@ -253,8 +271,14 @@ static int silfp_parse_dts(struct silfp_data* fp_dev)
             ret = -1;
             break;
         }
-        fp_dev->int_port = 141;//irq_of_parse_and_map(node, 0);
+        fp_dev->int_port = irq_of_parse_and_map(node, 0);
         LOG_MSG_DEBUG(INFO_LOG, "%s, irq = %d\n", __func__, fp_dev->int_port);
+
+        	if (fp_dev->int_port == 0) {
+			gpio = of_get_named_gpio(node, "int_gpio", 0);
+			fp_dev->int_port = gpio_to_irq(gpio);
+			LOG_MSG_DEBUG(INFO_LOG, "%s, gpio = %d, int_port = %d\n", __func__, gpio, fp_dev->int_port);
+		}
 
         node = of_find_compatible_node(NULL, NULL, FP_PINS_OF);
         if (!node) {
@@ -320,7 +344,14 @@ static int silfp_parse_dts(struct silfp_data* fp_dev)
         LOG_MSG_DEBUG(ERR_LOG, "%s can't find silfp avdd-enable\n", __func__);
         // Ignore error
     }
-
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 start*/
+    fp_dev->pin.pins_avdd_l = pinctrl_lookup_state(fp_dev->pin.pinctrl, "avdd-disable");
+    if (IS_ERR_OR_NULL(fp_dev->pin.pins_avdd_l)) {
+        fp_dev->pin.pins_avdd_l = NULL;
+        LOG_MSG_DEBUG(ERR_LOG, "%s can't find silfp avdd-disable\n", __func__);
+        // Ignore error
+    }
+/*C3T code for HQ-223309 by zhoumengxuan at 22.9.2 end*/
     fp_dev->pin.pins_vddio_h = pinctrl_lookup_state(fp_dev->pin.pinctrl, "vddio-enable");
     if (IS_ERR_OR_NULL(fp_dev->pin.pins_vddio_h)) {
         fp_dev->pin.pins_vddio_h = NULL;
@@ -332,8 +363,6 @@ static int silfp_parse_dts(struct silfp_data* fp_dev)
 #ifdef BSP_SIL_POWER_SUPPLY_REGULATOR
     // Todo: use correct settings.
     fp_dev->avdd_ldo = regulator_get(&fp_dev->spi->dev, "avdd");
-    if(fp_dev->avdd_ldo == NULL)
-      pr_info("Error getting fp_dev->avdd_ldo\n");
     fp_dev->vddio_ldo= regulator_get(&fp_dev->spi->dev, "vddio");
 #endif /* BSP_SIL_POWER_SUPPLY_REGULATOR */
 
@@ -378,37 +407,43 @@ static int silfp_set_spi(struct silfp_data *fp_dev, bool enable)
     LOG_MSG_DEBUG(DBG_LOG, "[%s] done\n",__func__);
 #else
     int ret = -ENOENT;
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 start*/
 	fp_dev->spi1=silfp_dev.spi1;
     struct mt_spi_t *ms = NULL;
     ms = spi_master_get_devdata(fp_dev->spi1->master);
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 end*/
 
     if ( /*!fp_dev->pin.spi_id || */ !ms ) {
         LOG_MSG_DEBUG(ERR_LOG, "%s: not support\n", __func__);
         return ret;
     }
-   if (enable) {
-        if (!atomic_read(&fp_dev->spionoff_count)) {
-            //clk_prepare_enable(ms->clk_main);
-            //ret = clk_enable(ms->clk_main);
-            ret = mt_spi_enable_master_clk(fp_dev->spi1);
-        }
+
+    if ( enable && !atomic_read(&fp_dev->spionoff_count) ) {
         atomic_inc(&fp_dev->spionoff_count);
+        /*	clk_prepare_enable(ms->clk_main); */
+        //ret = clk_enable(ms->clk_main);
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 start*/
+        ret = mt_spi_enable_master_clk(fp_dev->spi1);
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 end*/
     } else if (atomic_read(&fp_dev->spionoff_count)) {
         atomic_dec(&fp_dev->spionoff_count);
-        if (!atomic_read(&fp_dev->spionoff_count)) {
-            //clk_disable_unprepare(ms->clk_main);
-            //clk_disable(ms->clk_main);
-            mt_spi_disable_master_clk(fp_dev->spi1);
-        }
+        /*	clk_disable_unprepare(ms->clk_main); */
+        //clk_disable(ms->clk_main);
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 start*/
+        mt_spi_disable_master_clk(fp_dev->spi1);
+/*C3T code for HQ-224157 by zhoumengxuan at 22.7.30 end*/
         ret = 0;
     } else {
-        LOG_MSG_DEBUG(ERR_LOG, "[%s] unpaired enable/disable %d\n", __func__, enable);
+        LOG_MSG_DEBUG(ERR_LOG, "unpaired enable/disable %d [%s]\n",enable, __func__);
         ret = 0;
     }
-    LOG_MSG_DEBUG(INFO_LOG, "[%s] fp_dev->spionoff_count: %d, done (%d).\n", __func__, fp_dev->spionoff_count, ret);
+    LOG_MSG_DEBUG(DBG_LOG, "[%s] done (%d).\n",__func__,ret);
 #endif /* CONFIG_MTK_CLKMGR */
 #endif /* !CONFIG_MT_SPI_FPGA_ENABLE */
 #else
+    silfp_spi_clk_enable(enable);
+    LOG_MSG_DEBUG(DBG_LOG, "set spi clk %s [%s]\n", enable ? "enabled" : "disabled", __func__);
+
     return -ENOENT;
 #endif /* !CONFIG_SILEAD_FP_PLATFORM */
     return 0;
@@ -441,6 +476,21 @@ static int silfp_irq_to_reset_init(struct silfp_data *fp_dev)
     return ret;
 }
 
+static int silfp_set_feature(struct silfp_data *fp_dev, u8 feature)
+{
+    int ret = 0;
+
+    switch (feature) {
+    case FEATURE_FLASH_CS:
+        LOG_MSG_DEBUG(INFO_LOG, "%s set feature flash cs\n", __func__);
+        ret = silfp_irq_to_reset_init(fp_dev);
+        break;
+
+    default:
+        break;
+    }
+    return ret;
+}
 
 static int silfp_resource_init(struct silfp_data *fp_dev, struct fp_dev_init_t *dev_info)
 {
@@ -469,6 +519,7 @@ static int silfp_resource_init(struct silfp_data *fp_dev, struct fp_dev_init_t *
         gpio_free(fp_dev->rst_port);
     }*/
     pinctrl_select_state(fp_dev->pin.pinctrl, fp_dev->pin.pins_irq);
+
     fp_dev->irq = fp_dev->int_port; //gpio_to_irq(fp_dev->int_port);
     fp_dev->irq_is_disable = 0;
 
@@ -494,6 +545,9 @@ static int silfp_resource_init(struct silfp_data *fp_dev, struct fp_dev_init_t *
             status = -ENODEV;
             goto err_rst;
         } else {
+/*C3T code for HQ-219134 by zhoumengxuan at 22.8.15 start*/
+			msleep(10);
+/*C3T code for HQ-219134 by zhoumengxuan at 22.8.15 end*/
             gpio_direction_output(fp_dev->rst_port, 1);
         }
     }
